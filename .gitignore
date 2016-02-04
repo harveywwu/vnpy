@@ -1,4 +1,4 @@
-# C++源代码
+﻿# C++源代码
 ipch/
 Release/
 
@@ -10,6 +10,7 @@ Release/
 *.filters
 *.vcxproj
 *.cd
+*.vcxproj.filters
 
 # Python编译文件
 *.pyc
@@ -37,10 +38,13 @@ Release/
 # 其他文件
 *.dump
 *.vssettings
+*.klg
+*.lkc
 
 <<<<<<< HEAD
 # 不想同步的
 *.local
+*.temp
 =======
 vn.ctp/build/*
 vn.lts/build/*

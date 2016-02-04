@@ -17,7 +17,7 @@ class BasicCell(QtGui.QTableWidgetItem):
     """基础的单元格"""
 
     #----------------------------------------------------------------------
-    def __init__(self, text=None):
+    def __init__(self, text=None, mainEngine=None):
         """Constructor"""
         super(BasicCell, self).__init__()
         self.data = None
@@ -38,7 +38,7 @@ class DirectionCell(QtGui.QTableWidgetItem):
     """用来显示买卖方向的单元格"""
 
     #----------------------------------------------------------------------
-    def __init__(self, text=None):
+    def __init__(self, text=None, mainEngine=None):
         """Constructor"""
         super(DirectionCell, self).__init__()
         self.data = None
@@ -57,35 +57,43 @@ class DirectionCell(QtGui.QTableWidgetItem):
 
 ########################################################################
 class NameCell(QtGui.QTableWidgetItem):
-    """用来显示合约中文的单元格"""
-    dataEngine = None
+    """用来显示合约中文名的单元格"""
 
     #----------------------------------------------------------------------
-    def __init__(self, text=None, dataEngine=None):
+    def __init__(self, text=None, mainEngine=None):
         """Constructor"""
         super(NameCell, self).__init__()
         self.data = None
         if text:
             self.setContent(text)
-            
+    
     #----------------------------------------------------------------------
-    @staticmethod
-    def setDataEngine(self, dataEngine):
-        """设置读取合约用的数据引擎对象"""
-        self.dataEngine = dataEngine
+    def setContent(self, text):
+        """设置内容"""
+        self.setText(text)
+
+
+########################################################################
+class NameCell(QtGui.QTableWidgetItem):
+    """用来显示合约中文的单元格"""
+
+    #----------------------------------------------------------------------
+    def __init__(self, text=None, mainEngine=None):
+        """Constructor"""
+        super(NameCell, self).__init__()
+        
+        self.mainEngine = mainEngine
+        self.data = None
+        
+        if text:
+            self.setContent(text)
         
     #----------------------------------------------------------------------
     def setContent(self, text):
         """设置内容"""
-        if self.dataEngine:
+        if self.mainEngine:
             # 首先尝试正常获取合约对象
-            contract = self.dataEngine.getContract(text)
-
-            # 如果交易所代码为UNKNOWN，则删除交易所代码部分后再试
-            if EXCHANGE_UNKNOWN in text:
-                i = text.index('.')
-                symbol = text[:i]
-                contract = self.dataEngine.getContract(symbol)
+            contract = self.mainEngine.getContract(text)
             
             # 如果能读取合约信息
             if contract:
@@ -97,7 +105,7 @@ class BidCell(QtGui.QTableWidgetItem):
     """买价单元格"""
 
     #----------------------------------------------------------------------
-    def __init__(self, text=None):
+    def __init__(self, text=None, mainEngine=None):
         """Constructor"""
         super(BidCell, self).__init__()
         self.data = None
@@ -118,7 +126,7 @@ class AskCell(QtGui.QTableWidgetItem):
     """买价单元格"""
 
     #----------------------------------------------------------------------
-    def __init__(self, text=None):
+    def __init__(self, text=None, mainEngine=None):
         """Constructor"""
         super(AskCell, self).__init__()
         self.data = None
@@ -146,10 +154,11 @@ class BasicMonitor(QtGui.QTableWidget):
     signal = QtCore.pyqtSignal(type(Event()))
 
     #----------------------------------------------------------------------
-    def __init__(self, eventEngine=None, parent=None):
+    def __init__(self, mainEngine=None, eventEngine=None, parent=None):
         """Constructor"""
         super(BasicMonitor, self).__init__(parent)
         
+        self.mainEngine = mainEngine
         self.eventEngine = eventEngine
         
         # 保存表头标签用
@@ -168,6 +177,9 @@ class BasicMonitor(QtGui.QTableWidget):
         
         # 保存数据对象到单元格
         self.saveData = False
+        
+        # 默认不允许根据表头进行排序，需要的组件可以开启
+        self.sorting = False
         
     #----------------------------------------------------------------------
     def setHeaderDict(self, headerDict):
@@ -214,6 +226,9 @@ class BasicMonitor(QtGui.QTableWidget):
         
         # 设为行交替颜色
         self.setAlternatingRowColors(True)
+        
+        # 设置允许排序
+        self.setSortingEnabled(self.sorting)
 
     #----------------------------------------------------------------------
     def registerEvent(self):
@@ -230,6 +245,10 @@ class BasicMonitor(QtGui.QTableWidget):
     #----------------------------------------------------------------------
     def updateData(self, data):
         """将数据更新到表格中"""
+        # 如果允许了排序功能，则插入数据前必须关闭，否则插入新的数据会变乱
+        if self.sorting:
+            self.setSortingEnabled(False)
+        
         # 如果设置了dataKey，则采用存量更新模式
         if self.dataKey:
             key = data.__getattribute__(self.dataKey)
@@ -240,7 +259,7 @@ class BasicMonitor(QtGui.QTableWidget):
                 for n, header in enumerate(self.headerList):
                     content = safeUnicode(data.__getattribute__(header))
                     cellType = self.headerDict[header]['cellType']
-                    cell = cellType(content)
+                    cell = cellType(content, self.mainEngine)
                     
                     if self.font:
                         cell.setFont(self.font)  # 如果设置了特殊字体，则进行单元格设置
@@ -257,7 +276,7 @@ class BasicMonitor(QtGui.QTableWidget):
                 for header in self.headerList:
                     content = safeUnicode(data.__getattribute__(header))
                     cell = d[header]
-                    cell.setContent(content)
+                    cell.setContent(content, self.mainEngine)
                     
                     if self.saveData:            # 如果设置了保存数据对象，则进行对象保存
                         cell.data = data                    
@@ -267,7 +286,7 @@ class BasicMonitor(QtGui.QTableWidget):
             for n, header in enumerate(self.headerList):
                 content = safeUnicode(data.__getattribute__(header))
                 cellType = self.headerDict[header]['cellType']
-                cell = cellType(content)
+                cell = cellType(content, self.mainEngine)
                 
                 if self.font:
                     cell.setFont(self.font)
@@ -279,11 +298,21 @@ class BasicMonitor(QtGui.QTableWidget):
                 
         # 调整列宽
         self.resizeColumns()
+        
+        # 重新打开排序
+        if self.sorting:
+            self.setSortingEnabled(True)
     
     #----------------------------------------------------------------------
     def resizeColumns(self):
         """调整各列的大小"""
         self.horizontalHeader().resizeSections(QtGui.QHeaderView.ResizeToContents)    
+        
+    #----------------------------------------------------------------------
+    def setSorting(self, sorting):
+        """设置是否允许根据表头排序"""
+        self.sorting = sorting
+        
     
 
 ########################################################################
@@ -291,9 +320,9 @@ class MarketMonitor(BasicMonitor):
     """市场监控组件"""
 
     #----------------------------------------------------------------------
-    def __init__(self, eventEngine, parent=None):
+    def __init__(self, mainEngine, eventEngine, parent=None):
         """Constructor"""
-        super(MarketMonitor, self).__init__(eventEngine, parent)
+        super(MarketMonitor, self).__init__(mainEngine, eventEngine, parent)
         
         # 设置表头有序字典
         d = OrderedDict()
@@ -322,6 +351,9 @@ class MarketMonitor(BasicMonitor):
         # 设置字体
         self.setFont(BASIC_FONT)
         
+        # 设置允许排序
+        self.setSorting(True)
+        
         # 初始化表格
         self.initTable()
         
@@ -334,9 +366,9 @@ class LogMonitor(BasicMonitor):
     """日志监控"""
 
     #----------------------------------------------------------------------
-    def __init__(self, eventEngine, parent=None):
+    def __init__(self, mainEngine, eventEngine, parent=None):
         """Constructor"""
-        super(LogMonitor, self).__init__(eventEngine, parent)
+        super(LogMonitor, self).__init__(mainEngine, eventEngine, parent)
         
         d = OrderedDict()        
         d['logTime'] = {'chinese':u'时间', 'cellType':BasicCell}
@@ -355,9 +387,9 @@ class ErrorMonitor(BasicMonitor):
     """错误监控"""
 
     #----------------------------------------------------------------------
-    def __init__(self, eventEngine, parent=None):
+    def __init__(self, mainEngine, eventEngine, parent=None):
         """Constructor"""
-        super(ErrorMonitor, self).__init__(eventEngine, parent)
+        super(ErrorMonitor, self).__init__(mainEngine, eventEngine, parent)
         
         d = OrderedDict()        
         d['errorID'] = {'chinese':u'错误代码', 'cellType':BasicCell}
@@ -377,9 +409,9 @@ class TradeMonitor(BasicMonitor):
     """成交监控"""
 
     #----------------------------------------------------------------------
-    def __init__(self, eventEngine, parent=None):
+    def __init__(self, mainEngine, eventEngine, parent=None):
         """Constructor"""
-        super(TradeMonitor, self).__init__(eventEngine, parent)
+        super(TradeMonitor, self).__init__(mainEngine, eventEngine, parent)
         
         d = OrderedDict()
         d['tradeID'] = {'chinese':u'成交编号', 'cellType':BasicCell}
@@ -405,9 +437,9 @@ class OrderMonitor(BasicMonitor):
     """委托监控"""
 
     #----------------------------------------------------------------------
-    def __init__(self, eventEngine, mainEngine, parent=None):
+    def __init__(self, mainEngine, eventEngine, parent=None):
         """Constructor"""
-        super(OrderMonitor, self).__init__(eventEngine, parent)
+        super(OrderMonitor, self).__init__(mainEngine, eventEngine, parent)
 
         self.mainEngine = mainEngine
         
@@ -463,15 +495,16 @@ class PositionMonitor(BasicMonitor):
     """持仓监控"""
 
     #----------------------------------------------------------------------
-    def __init__(self, eventEngine, parent=None):
+    def __init__(self, mainEngine, eventEngine, parent=None):
         """Constructor"""
-        super(PositionMonitor, self).__init__(eventEngine, parent)
+        super(PositionMonitor, self).__init__(mainEngine, eventEngine, parent)
         
         d = OrderedDict()
         d['symbol'] = {'chinese':u'合约代码', 'cellType':BasicCell}
         d['vtSymbol'] = {'chinese':u'名称', 'cellType':NameCell}
         d['direction'] = {'chinese':u'方向', 'cellType':DirectionCell}
         d['position'] = {'chinese':u'持仓量', 'cellType':BasicCell}
+        d['ydPosition'] = {'chinese':u'昨持仓', 'cellType':BasicCell}
         d['frozen'] = {'chinese':u'冻结量', 'cellType':BasicCell}
         d['price'] = {'chinese':u'价格', 'cellType':BasicCell}
         d['gatewayName'] = {'chinese':u'接口', 'cellType':BasicCell}
@@ -489,9 +522,9 @@ class AccountMonitor(BasicMonitor):
     """账户监控"""
 
     #----------------------------------------------------------------------
-    def __init__(self, eventEngine, parent=None):
+    def __init__(self, mainEngine, eventEngine, parent=None):
         """Constructor"""
-        super(AccountMonitor, self).__init__(eventEngine, parent)
+        super(AccountMonitor, self).__init__(mainEngine, eventEngine, parent)
         
         d = OrderedDict()
         d['accountID'] = {'chinese':u'账户', 'cellType':BasicCell}
@@ -522,7 +555,7 @@ class TradingWidget(QtGui.QFrame):
 
     offsetList = [OFFSET_OPEN,
                   OFFSET_CLOSE,
-                  OFFSET_CLOSESYESTERDAY,
+                  OFFSET_CLOSEYESTERDAY,
                   OFFSET_CLOSETODAY]
     
     priceTypeList = [PRICETYPE_LIMITPRICE,
@@ -537,6 +570,7 @@ class TradingWidget(QtGui.QFrame):
                     EXCHANGE_CZCE,
                     EXCHANGE_SSE,
                     EXCHANGE_SZSE,
+                    EXCHANGE_SGE,
                     EXCHANGE_SMART,
                     EXCHANGE_GLOBEX,
                     EXCHANGE_IDEALPRO]
@@ -552,12 +586,11 @@ class TradingWidget(QtGui.QFrame):
     gatewayList = ['']
 
     #----------------------------------------------------------------------
-    def __init__(self, mainEngine, eventEngine, dataEngine, parent=None):
+    def __init__(self, mainEngine, eventEngine, parent=None):
         """Constructor"""
         super(TradingWidget, self).__init__(parent)
         self.mainEngine = mainEngine
         self.eventEngine = eventEngine
-        self.dataEngine = dataEngine
         
         self.symbol = ''
         
@@ -755,7 +788,7 @@ class TradingWidget(QtGui.QFrame):
     def updateSymbol(self):
         """合约变化"""
         # 读取组件数据
-        symbol = unicode(self.lineSymbol.text())
+        symbol = str(self.lineSymbol.text())
         exchange = unicode(self.comboExchange.currentText())
         currency = unicode(self.comboCurrency.currentText())
         productClass = unicode(self.comboProductClass.currentText())           
@@ -764,12 +797,13 @@ class TradingWidget(QtGui.QFrame):
         # 查询合约
         if exchange:
             vtSymbol = '.'.join([symbol, exchange])
-            contract = self.dataEngine.getContract(vtSymbol)
+            contract = self.mainEngine.getContract(vtSymbol)
         else:
             vtSymbol = symbol
-            contract = self.dataEngine.getContract(symbol)   
+            contract = self.mainEngine.getContract(symbol)   
         
         if contract:
+            vtSymbol = contract.vtSymbol
             gatewayName = contract.gatewayName
             self.lineName.setText(contract.name)
             exchange = contract.exchange    # 保证有交易所代码
@@ -866,7 +900,7 @@ class TradingWidget(QtGui.QFrame):
     #----------------------------------------------------------------------
     def sendOrder(self):
         """发单"""
-        symbol = unicode(self.lineSymbol.text())
+        symbol = str(self.lineSymbol.text())
         exchange = unicode(self.comboExchange.currentText())
         currency = unicode(self.comboCurrency.currentText())
         productClass = unicode(self.comboProductClass.currentText())           
@@ -900,7 +934,7 @@ class TradingWidget(QtGui.QFrame):
     #----------------------------------------------------------------------
     def cancelAll(self):
         """一键撤销所有委托"""
-        l = self.dataEngine.getAllWorkingOrders()
+        l = self.mainEngine.getAllWorkingOrders()
         for order in l:
             req = VtCancelOrderReq()
             req.symbol = order.symbol
@@ -916,11 +950,11 @@ class ContractMonitor(BasicMonitor):
     """合约查询"""
 
     #----------------------------------------------------------------------
-    def __init__(self, dataEngine, parent=None):
+    def __init__(self, mainEngine, parent=None):
         """Constructor"""
         super(ContractMonitor, self).__init__(parent=parent)
         
-        self.dataEngine = dataEngine
+        self.mainEngine = mainEngine
         
         d = OrderedDict()
         d['symbol'] = {'chinese':u'合约代码', 'cellType':BasicCell}
@@ -949,7 +983,7 @@ class ContractMonitor(BasicMonitor):
     #----------------------------------------------------------------------
     def showAllContracts(self):
         """显示所有合约数据"""
-        l = self.dataEngine.getAllContracts()
+        l = self.mainEngine.getAllContracts()
         d = {'.'.join([contract.exchange, contract.symbol]):contract for contract in l}
         l2 = d.keys()
         l2.sort(reverse=True)

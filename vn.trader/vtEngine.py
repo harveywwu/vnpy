@@ -7,10 +7,6 @@ from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
 from eventEngine import *
-from ctpGateway import CtpGateway
-from ltsGateway import LtsGateway
-#from windGateway import WindGateway
-from ibGateway import IbGateway
 from vtGateway import *
 import uiBasicWidget
 from ctaEngine import CtaEngine
@@ -24,32 +20,74 @@ class MainEngine(object):
     def __init__(self):
         """Constructor"""
         # 创建事件引擎
-        self.eventEngine = EventEngine()
+        self.eventEngine = EventEngine2()
         self.eventEngine.start()
         
         # 创建数据引擎
         self.dataEngine = DataEngine(self.eventEngine)
-        uiBasicWidget.NameCell.setDataEngine(uiBasicWidget.NameCell, self.dataEngine)   # 将数据引擎对象传给NameCell
-        
-        # 用来保存接口对象的字典
-        self.gatewayDict = OrderedDict()
-        
-        # 创建我们想要接入的接口对象
-        self.addGateway(CtpGateway, 'CTP')
-        self.gatewayDict['CTP'].setQryEnabled(True)
-        
-        self.addGateway(LtsGateway, 'LTS')
-        self.gatewayDict['LTS'].setQryEnabled(True)
-        
-        #self.addGateway(WindGateway, 'Wind')    # 没有Wind的请注释掉这一行
-        
-        self.addGateway(IbGateway, 'IB')
         
         # MongoDB数据库相关
         self.dbClient = None    # MongoDB客户端对象
         
         # CTA引擎
-        self.ctaEngine = CtaEngine(self, self.eventEngine, self.dataEngine)
+        self.ctaEngine = CtaEngine(self, self.eventEngine)
+        
+        # 调用一个个初始化函数
+        self.initGateway()
+        
+    #----------------------------------------------------------------------
+    def initGateway(self):
+        """初始化接口对象"""
+        # 用来保存接口对象的字典
+        self.gatewayDict = OrderedDict()
+        
+        # 创建我们想要接入的接口对象
+        try:
+            from ctpGateway.ctpGateway import CtpGateway
+            self.addGateway(CtpGateway, 'CTP')
+            self.gatewayDict['CTP'].setQryEnabled(True)
+        except Exception, e:
+            print e
+        
+        try:
+            from ltsGateway.ltsGateway import LtsGateway
+            self.addGateway(LtsGateway, 'LTS')
+            self.gatewayDict['LTS'].setQryEnabled(True)
+        except Exception, e:
+            print e
+        
+        try:
+            from ksotpGateway.ksotpGateway import KsotpGateway
+            self.addGateway(KsotpGateway, 'KSOTP')
+            self.gatewayDict['KSOTP'].setQryEnabled(True)
+        except Exception, e:
+            print e    
+            
+        try:
+            from femasGateway.femasGateway import FemasGateway
+            self.addGateway(FemasGateway, 'FEMAS')
+            self.gatewayDict['FEMAS'].setQryEnabled(True)
+        except Exception, e:
+            print e  
+            
+        try:
+            from ksgoldGateway.ksgoldGateway import KsgoldGateway
+            self.addGateway(KsgoldGateway, 'KSGOLD')
+            self.gatewayDict['KSGOLD'].setQryEnabled(True)
+        except Exception, e:
+            print e
+            
+        try:
+            from windGateway.windGateway import WindGateway
+            self.addGateway(WindGateway, 'Wind') 
+        except Exception, e:
+            print e
+        
+        try:
+            from ibGateway.ibGateway import IbGateway
+            self.addGateway(IbGateway, 'IB')
+        except Exception, e:
+            print e
 
     #----------------------------------------------------------------------
     def addGateway(self, gateway, gatewayName=None):
@@ -93,7 +131,7 @@ class MainEngine(object):
             self.writeLog(u'接口不存在：%s' %gatewayName)        
         
     #----------------------------------------------------------------------
-    def getAccont(self, gatewayName):
+    def qryAccont(self, gatewayName):
         """查询特定接口的账户"""
         if gatewayName in self.gatewayDict:
             gateway = self.gatewayDict[gatewayName]
@@ -102,7 +140,7 @@ class MainEngine(object):
             self.writeLog(u'接口不存在：%s' %gatewayName)        
         
     #----------------------------------------------------------------------
-    def getPosition(self, gatewayName):
+    def qryPosition(self, gatewayName):
         """查询特定接口的持仓"""
         if gatewayName in self.gatewayDict:
             gateway = self.gatewayDict[gatewayName]
@@ -160,7 +198,27 @@ class MainEngine(object):
             return cursor
         else:
             return None
-
+    
+    #----------------------------------------------------------------------
+    def getContract(self, vtSymbol):
+        """查询合约"""
+        return self.dataEngine.getContract(vtSymbol)
+    
+    #----------------------------------------------------------------------
+    def getAllContracts(self):
+        """查询所有合约（返回列表）"""
+        return self.dataEngine.getAllContracts()
+    
+    #----------------------------------------------------------------------
+    def getOrder(self, vtOrderID):
+        """查询委托"""
+        return self.dataEngine.getOrder(vtOrderID)
+    
+    #----------------------------------------------------------------------
+    def getAllWorkingOrders(self):
+        """查询所有的活跃的委托（返回列表）"""
+        return self.dataEngine.getAllWorkingOrders()
+    
 
 ########################################################################
 class DataEngine(object):
